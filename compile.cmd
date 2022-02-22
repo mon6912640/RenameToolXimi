@@ -1,3 +1,3 @@
 @echo off
-pyinstaller -F RenameToolXimi.py
+pyinstaller -F -w RenameToolXimi.py
 pause

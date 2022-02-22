@@ -1,8 +1,20 @@
-import argparse
 import re
 import shutil
 import sys
 from pathlib import Path
+
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import QMainWindow, QApplication
+
+from gui.main import *
+from monkey_event import *
+
+EVENT_LOG = 'event_log'
+
+
+def show_log(pstr):
+    EventCenterSync.send_event(EVENT_LOG, pstr)
 
 
 def run(spath, tpath):
@@ -13,7 +25,7 @@ def run(spath, tpath):
     run_flag = False
     for v in list_files:
         if v.is_dir():
-            if re.match('d\d+', v.stem):  # 匹配d+数字的文件夹
+            if re.match(r'd\d+', v.stem):  # 匹配d+数字的文件夹
                 path_result = path_target.joinpath(v.parent.stem).joinpath(v.stem)
                 # print(v.stem, v.parent.stem, path_result)
                 png_results = []
@@ -39,40 +51,72 @@ def run(spath, tpath):
                         png_results += list_pngs
                 # print(png_results)
 
-                for i in range(len(png_results)):
-                    run_flag = True
-                    if not path_result.exists():
-                        path_result.mkdir(parents=True, exist_ok=True)
-                    png_target = path_result.joinpath(str(i + 1) + '.png')
-                    shutil.copy(str(png_results[i]), png_target)
+                if len(png_results) > 0:
+                    for i in range(len(png_results)):
+                        run_flag = True
+                        if not path_result.exists():
+                            path_result.mkdir(parents=True, exist_ok=True)
+                        png_target = path_result.joinpath(str(i + 1) + '.png')
+                        shutil.copy(str(png_results[i]), png_target)
+
     if run_flag:
-        print('成功运行')
+        show_log('......转换成功')
     else:
-        print('没有可转换的文件')
+        show_log('......没有可转换的文件')
+
+
+class MyMainWin(QMainWindow, Ui_MainWindow):
+
+    def __init__(self):
+        super(MyMainWin, self).__init__()
+        self.setupUi(self)
+        self.setAcceptDrops(True)
+
+        EventCenterSync.add_event(EVENT_LOG, self.handle_show_log)
+
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        # EventCenterSync.send_event(EVENT_SHOW_LOG, '拖进来')
+        mime_data: QMimeData = event.mimeData()
+        if mime_data.hasImage():
+            print('fuckyou')
+
+        if mime_data.hasFormat('text/uri-list'):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        pass
+        # EventCenter.send_event(EVENT_SHOW_LOG, '拖进来')
+
+    def dropEvent(self, event: QDropEvent):
+        mime_data: QMimeData = event.mimeData()
+        files: List[QUrl] = mime_data.urls()
+        for url in files:
+            path_source = Path(url.toLocalFile())
+            if not path_source.exists():
+                continue
+            if path_source.is_dir():
+                # print(path_source.parent)
+                self.show_log(str(path_source))
+                run(path_source, path_source.parent.joinpath('copy_rename'))
+
+    def handle_show_log(self, event: EventVo):
+        # print('handle_show_log == '+event.type)
+        self.show_log(event.data)
+
+    def show_log(self, p_str: str):
+        self.areaShow.append(p_str.encode('utf-8').decode('utf-8'))
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='帮助信息')
-    parser.add_argument('--source', type=str, default='', help='源路径')
-    parser.add_argument('--output', type=str, default='', help='输出路径')
-    args = parser.parse_args()
+    # # source = 'C:\\Users\\Administrator\\Desktop\\test'
+    # # target = 'C:\\Users\\Administrator\\Desktop\\test1'
+    # run(source, target)
+    app = QApplication(sys.argv)
 
-    source = args.source
-    target = args.output
+    main_win = MyMainWin()
+    main_win.show()
+    main_win.setWindowTitle('动作帧重命名工具')
 
-    path_app = Path(sys.argv[0]).parent
-    print(path_app)
-
-    if not source:
-        source = path_app
-
-    if not source:
-        print('无指定源路径，程序结束')
-        sys.exit()
-
-    if not target:
-        target = Path(source).joinpath('copy')
-
-    # source = 'C:\\Users\\Administrator\\Desktop\\test'
-    # target = 'C:\\Users\\Administrator\\Desktop\\test1'
-    run(source, target)
+    sys.exit(app.exec_())
