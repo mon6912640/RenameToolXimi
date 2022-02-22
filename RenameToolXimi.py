@@ -60,9 +60,9 @@ def run(spath, tpath):
                         shutil.copy(str(png_results[i]), png_target)
 
     if run_flag:
-        show_log('......转换成功')
+        return True
     else:
-        show_log('......没有可转换的文件')
+        return False
 
 
 class MyMainWin(QMainWindow, Ui_MainWindow):
@@ -71,15 +71,18 @@ class MyMainWin(QMainWindow, Ui_MainWindow):
         super(MyMainWin, self).__init__()
         self.setupUi(self)
         self.setAcceptDrops(True)
+        self.areaShow.setOpenLinks(False)
+        self.areaShow.setOpenExternalLinks(False)
+
+        self.areaShow.anchorClicked.connect(self.on_anchor_clicked)
 
         EventCenterSync.add_event(EVENT_LOG, self.handle_show_log)
 
-    def dragEnterEvent(self, event: QDragEnterEvent):
-        # EventCenterSync.send_event(EVENT_SHOW_LOG, '拖进来')
-        mime_data: QMimeData = event.mimeData()
-        if mime_data.hasImage():
-            print('fuckyou')
+    def on_anchor_clicked(self, url: QUrl):
+        QDesktopServices.openUrl(url)
 
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        mime_data: QMimeData = event.mimeData()
         if mime_data.hasFormat('text/uri-list'):
             event.acceptProposedAction()
         else:
@@ -87,7 +90,6 @@ class MyMainWin(QMainWindow, Ui_MainWindow):
 
     def dragMoveEvent(self, event):
         pass
-        # EventCenter.send_event(EVENT_SHOW_LOG, '拖进来')
 
     def dropEvent(self, event: QDropEvent):
         mime_data: QMimeData = event.mimeData()
@@ -98,8 +100,17 @@ class MyMainWin(QMainWindow, Ui_MainWindow):
                 continue
             if path_source.is_dir():
                 # print(path_source.parent)
-                self.show_log(str(path_source))
-                run(path_source, path_source.parent.joinpath('copy_rename'))
+                self.show_log('来源：' + str(path_source))
+                ptarget = path_source.parent.joinpath('copy_rename')
+                if run(path_source, ptarget):
+                    self.show_log('......转换成功')
+                    if ptarget.is_absolute():
+                        file_url = ptarget.as_uri()
+                    else:
+                        file_url = str(ptarget)
+                    self.show_log('......生成路径：' + '<a href="{0}">{1}</a>'.format(file_url, str(ptarget)))
+                else:
+                    self.show_log('<font color="#ff0000">......没有可转换的文件</font>')
 
     def handle_show_log(self, event: EventVo):
         # print('handle_show_log == '+event.type)
